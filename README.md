@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.png" width="360" alt="Bird to Impress logo"></p>
+
 # 🐦 Bird to Impress
 
 A 3D bird dress-up game in the style of **Dress to Impress**. You can play it in your browser (it works on iPad too).
