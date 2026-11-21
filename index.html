@@ -115,6 +115,8 @@ body.runway .coins{display:none}
 .tsbox{max-width:440px;background:rgba(255,255,255,.85)}
 #titleLogo{width:min(320px,70vw);height:auto;display:block;margin:-6px auto 0}
 #tsInfo{font-weight:600;margin:2px 0 6px}
+.shape{flex:0 0 auto;border:0;border-radius:14px;padding:7px 12px;font:600 14px 'Fredoka',system-ui;background:#f1edff;color:var(--ink)}
+.shape.on{background:var(--pink);color:#fff}
 #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .4s;z-index:9}
 </style>
 </head>
@@ -242,12 +244,14 @@ const VC=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.55});
 function painted(geo,fn){ const p=geo.attributes.position, cols=[], v=new THREE.Vector3(), c=new THREE.Color();
   for(let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i).normalize(); fn(v,c); cols.push(c.r,c.g,c.b); }
   geo.setAttribute('color',new THREE.Float32BufferAttribute(cols,3)); return geo; }
-function buildBird(sp){
+const SHAPES={skinny:{w:.7,name:'Skinny',e:'🥢'},normal:{w:.85,name:'Normal',e:'🐦'},fat:{w:1.1,name:'Chubby',e:'🍩'}};
+function buildBird(sp,shape='normal'){
   const g=new THREE.Group(), lift=sp.lift||0, up=new THREE.Group(); up.position.y=lift; g.add(up);
+  const bw=(SHAPES[shape]||SHAPES.normal).w, torso=new THREE.Group(); torso.scale.set(bw,1,bw); up.add(torso);
   const bodyCol=new THREE.Color(sp.body), bellyCol=new THREE.Color(sp.belly||sp.body), throatCol=sp.throat!=null?new THREE.Color(sp.throat):null;
-  up.add(m(painted(S(.6,40,30),(n,c)=>{ c.copy(bodyCol).lerp(bellyCol,sstep(.2,.7,n.z)*(1-sstep(.35,.8,n.y))*(1-sstep(.6,.95,-n.y)));
+  torso.add(m(painted(S(.6,40,30),(n,c)=>{ c.copy(bodyCol).lerp(bellyCol,sstep(.2,.7,n.z)*(1-sstep(.35,.8,n.y))*(1-sstep(.6,.95,-n.y)));
     if(throatCol) c.lerp(throatCol,sstep(.15,.6,n.z)*sstep(.45,.8,n.y)); }),VC,[0,1,0],null,[1,1.15,.95]));
-  if(sp.collar) up.add(m(To(.33,.06,8,32),sp.collar,[0,1.6,.03],[PI/2,0,0]));
+  if(sp.collar) torso.add(m(To(.33,.06,8,32),sp.collar,[0,1.6,.03],[PI/2,0,0]));
   const head=new THREE.Group(); head.position.set(0,1.85,.05); up.add(head);
   const headCol=new THREE.Color(sp.head), faceCol=sp.face!=null?new THREE.Color(sp.face):null, foreCol=sp.forehead!=null?new THREE.Color(sp.forehead):null;
   head.add(m(painted(S(.42,40,30),(n,c)=>{ c.copy(headCol);
@@ -273,7 +277,7 @@ function buildBird(sp){
     else crest=G(crestCone(sp.crest,.5,[0,.33,.05],-.55,0),crestCone(sp.crest,.38,[-.07,.32,.02],-.8,.18),crestCone(sp.crest,.38,[.07,.32,.02],-.8,-.18));
     head.add(crest); }
   const wings=[];
-  for(const sx of sides){ const w=new THREE.Group(); w.position.set(sx*.5,1.38,-.05);
+  for(const sx of sides){ const w=new THREE.Group(); w.position.set(sx*(.6*bw-.1),1.38,-.05);
     w.add(m(S(.5,20,16),sp.wing,[sx*.06,-.42,0],[0,0,sx*.08],[.3,.95,.75]));
     if(sp.wingTip) w.add(m(S(.3,16,12),sp.wingTip,[sx*.07,-.72,-.08],null,[.25,.7,.6]));
     up.add(w); wings.push(w); }
@@ -287,7 +291,7 @@ function buildBird(sp){
   for(const sx of sides){ g.add(m(Cy(.05,.05,legLen,10),sp.feet,[sx*.18,legLen/2-.01,.05])); g.add(m(Bx(.16,.06,.24),sp.feet,[sx*.18,.03,.13])); }
   const holder=new THREE.Group(); holder.position.set(.08,-.78,.1); holder.rotation.x=.8; wings[1].add(holder);
   g.scale.setScalar(sp.scale||1);
-  return {g,up,head,wings,eyes,crest,holder,spec:sp};
+  return {g,up,torso,head,wings,eyes,crest,holder,spec:sp};
 }
 
 /* ---------- clothing pieces ---------- */
@@ -705,20 +709,20 @@ const R=a=>a[Math.floor(Math.random()*a.length)];
 const shuffle=a=>{ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
 const clone=o=>JSON.parse(JSON.stringify(o));
 
-const state={bird:'cookie',stage:'studio',tab:'birds',dancing:false,muted:false,slots:{}};
+const state={bird:'cookie',shape:'normal',stage:'studio',tab:'birds',dancing:false,muted:false,slots:{}};
 SLOTS.forEach(s=>state.slots[s]={id:'none',color:null});
 let stats={wins:0,games:0,best:0,coins:100,owned:[],looks:[]};
-try{ const saved=JSON.parse(localStorage.getItem('birdDressUp')||'null'); if(saved&&saved.slots){ state.bird=saved.bird||state.bird; state.stage=saved.stage||state.stage; SLOTS.forEach(s=>{ if(saved.slots[s]) state.slots[s]=saved.slots[s]; }); }
+try{ const saved=JSON.parse(localStorage.getItem('birdDressUp')||'null'); if(saved&&saved.slots){ state.bird=saved.bird||state.bird; if(SHAPES[saved.shape]) state.shape=saved.shape; state.stage=saved.stage||state.stage; SLOTS.forEach(s=>{ if(saved.slots[s]) state.slots[s]=saved.slots[s]; }); }
   const st=JSON.parse(localStorage.getItem('birdDressUpStats')||'null'); if(st) stats=Object.assign(stats,st); }catch(e){}
 function updateCoins(){ const el=document.getElementById('coins'); if(el) el.textContent='💰 '+stats.coins; }
-function save(){ updateCoins(); try{ localStorage.setItem('birdDressUp',JSON.stringify({bird:state.bird,stage:state.stage,slots:state.slots})); localStorage.setItem('birdDressUpStats',JSON.stringify(stats)); }catch(e){} }
+function save(){ updateCoins(); try{ localStorage.setItem('birdDressUp',JSON.stringify({bird:state.bird,shape:state.shape,stage:state.stage,slots:state.slots})); localStorage.setItem('birdDressUpStats',JSON.stringify(stats)); }catch(e){} }
 
 /* ---------- actors (a dressed bird) ---------- */
-function makeActor(birdId,slots){ const sp=BIRDS.find(b=>b.id===birdId)||BIRDS[0]; const a={B:buildBird(sp),objs:{},slots,hop:0,blinkT:0,nextBlink:Math.random()*3,phase:Math.random()*6,spin:0,flapT:0}; SLOTS.forEach(s=>dressSlot(a,s)); return a; }
+function makeActor(birdId,slots,shape){ const sp=BIRDS.find(b=>b.id===birdId)||BIRDS[0]; const a={B:buildBird(sp,shape),objs:{},slots,hop:0,blinkT:0,nextBlink:Math.random()*3,phase:Math.random()*6,spin:0,flapT:0}; SLOTS.forEach(s=>dressSlot(a,s)); return a; }
 function dressSlot(a,slot){ const B=a.B, old=a.objs[slot]; if(old&&old.parent) old.parent.remove(old); a.objs[slot]=null;
   const st=a.slots[slot], it=findItem(slot,st.id);
   if(it.b){ const o=it.b(st.color??it.c); if(it.pos) o.position.set(...it.pos); if(it.rot) o.rotation.set(...it.rot);
-    (slot==='hat'||slot==='glasses'?B.head:slot==='held'?B.holder:slot==='shoes'?B.g:B.up).add(o); a.objs[slot]=o; }
+    (slot==='hat'||slot==='glasses'?B.head:slot==='held'?B.holder:slot==='shoes'?B.g:B.torso).add(o); a.objs[slot]=o; }
   if(slot==='hat'&&B.crest) B.crest.visible=!it.hideCrest; }
 function animateActor(a,dt,t,o={}){ const B=a.B, holding=a.slots.held.id!=='none', en=o.energetic;
   let flap=o.flap??(.08+Math.sin(t*2+a.phase)*.03), jump=0;
@@ -738,7 +742,7 @@ function animateActor(a,dt,t,o={}){ const B=a.B, holding=a.slots.held.id!=='none
   return jump; }
 
 let P=null;
-function setBird(id){ state.bird=id; if(P) dancer.remove(P.B.g); P=makeActor(id,state.slots); dancer.add(P.B.g); setTitle(); }
+function setBird(id){ state.bird=id; if(P) dancer.remove(P.B.g); P=makeActor(id,state.slots,state.shape); dancer.add(P.B.g); setTitle(); }
 function applySlot(s){ dressSlot(P,s); }
 function equip(slot,id,color){ const st=state.slots[slot], it=findItem(slot,id); st.id=it.id; st.color=color!==undefined?color:(it.c??null); applySlot(slot); save(); }
 function setTitle(){ $('#title').textContent=comp?`${comp.theme.e} ${comp.theme.name}`:`🐦 ${P.B.spec.name}'s Closet`; }
@@ -779,7 +783,9 @@ $('#buyYes').onclick=()=>{ if(!buying) return; const {slot,it}=buying; if(stats.
 function lookEmoji(sl){ return SLOTS.map(s=>sl[s]&&sl[s].id!=='none'?findItem(s,sl[s].id).e:null).filter(Boolean).slice(0,3).join('')||'🐦'; }
 function renderTabs(){ const el=$('#tabs'); el.innerHTML=''; TABS.forEach(([id,label])=>{ if(comp&&id==='stage') return; const b=document.createElement('button'); b.className='tab'+(state.tab===id?' on':''); b.textContent=label; b.onclick=()=>{ state.tab=id; renderTabs(); renderGrid(); }; el.appendChild(b); }); }
 function renderGrid(){ const grid=$('#grid'), cols=$('#colors'); grid.innerHTML=''; cols.innerHTML=''; cols.classList.add('hide'); const tab=state.tab;
-  if(tab==='birds'){ BIRDS.forEach(b=>grid.appendChild(card(b.e,b.name,state.bird===b.id,()=>{ setBird(b.id); sfx.chirp(); P.hop=.45; renderGrid(); save(); }))); return; }
+  if(tab==='birds'){ cols.classList.remove('hide'); Object.entries(SHAPES).forEach(([k,v])=>{ const b=document.createElement('button'); b.className='shape'+(state.shape===k?' on':''); b.textContent=v.e+' '+v.name;
+      b.onclick=()=>{ initAudio(); state.shape=k; setBird(state.bird); save(); sfx.pop(); P.hop=.45; renderGrid(); }; cols.appendChild(b); });
+    BIRDS.forEach(b=>grid.appendChild(card(b.e,b.name,state.bird===b.id,()=>{ setBird(b.id); sfx.chirp(); P.hop=.45; renderGrid(); save(); }))); return; }
   if(tab==='stage'){ Object.entries(STAGES).forEach(([id,s])=>grid.appendChild(card(s.e,s.name,state.stage===id,()=>{ setStage(id); sfx.pop(); renderGrid(); }))); return; }
   if(tab==='looks'){ grid.appendChild(card('➕','Save this look',false,()=>{ if(stats.looks.length>=12){ toast('Wardrobe full — delete a look first'); return; }
       stats.looks.push({name:'Look '+(stats.looks.length+1),slots:clone(state.slots)}); save(); sfx.ding(5); toast('💾 Look saved!'); renderGrid(); }));
@@ -862,7 +868,7 @@ function startRunway(){ comp.phase='runway'; closeModals(); state.dancing=false;
   document.body.classList.add('runway'); turntable.visible=false;
   const me=tour.players.find(p=>p.me); me.birdId=state.bird;
   comp.list=shuffle(tour.players.map(p=>({p,me:p.me,birdId:p.birdId,name:p.me?'You ('+birdOf(p.birdId).name+')':p.name,slots:p.me?clone(state.slots):aiDress(comp.theme)})));
-  comp.list.forEach(c=>c.actor=makeActor(c.birdId,c.slots)); comp.rw=buildRunway(comp.theme); comp.idx=-1; comp.pose=0; comp.cheer=0;
+  comp.list.forEach(c=>c.actor=makeActor(c.birdId,c.slots,c.me?state.shape:R(Object.keys(SHAPES)))); comp.rw=buildRunway(comp.theme); comp.idx=-1; comp.pose=0; comp.cheer=0;
   $('#btnSpeed').textContent=tour.speed===1?'⏩ 1x':'⏩ 2x'; startMusic(); nextWalker(); }
 function nextWalker(){ const prev=comp.list[comp.idx]; if(prev) comp.rw.g.remove(prev.actor.B.g);
   comp.idx++; if(comp.idx>=comp.list.length) return startResults();
